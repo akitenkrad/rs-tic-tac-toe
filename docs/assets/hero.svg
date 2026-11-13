@@ -1,0 +1,141 @@
+<svg width="100%" viewBox="0 0 1200 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="hero-title hero-desc">
+  <title id="hero-title">rs-tic-tac-toe — Tic-tac-toe in your terminal</title>
+  <desc id="hero-desc">A terminal tic-tac-toe game showing a three-by-three board at turn five, move evaluations, replay controls, and a game.tttrec record.</desc>
+
+  <style>
+    .title,
+    .subtitle,
+    .eyebrow,
+    .label,
+    .small {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    .title { font-size: 49px; font-weight: 700; letter-spacing: -1.4px; fill: #2C2C2A; }
+    .subtitle { font-size: 16px; font-weight: 400; fill: #5F5E5A; }
+    .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 2.4px; fill: #0F6E56; }
+    .label { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; fill: #5F5E5A; }
+    .small { font-size: 12px; font-weight: 600; fill: #5F5E5A; }
+    .mark-x { font-size: 31px; font-weight: 800; fill: #534AB7; }
+    .mark-o { font-size: 31px; font-weight: 800; fill: #0F6E56; }
+    .eval-win { font-size: 11px; font-weight: 700; fill: #0F6E56; }
+    .eval-draw { font-size: 11px; font-weight: 700; fill: #5F5E5A; }
+    .eval-loss { font-size: 11px; font-weight: 700; fill: #534AB7; }
+    .file-name { font-size: 12px; font-weight: 600; fill: #2C2C2A; }
+
+    .terminal { fill: #F8F7F3; stroke: #5F5E5A; stroke-width: 1.2; }
+    .panel { fill: #F1EFE8; stroke: #C7C5BD; stroke-width: 0.8; }
+    .board-cell { fill: #F8F7F3; stroke: #C7C5BD; stroke-width: 0.9; }
+    .x-cell { fill: #EEEDFE; stroke: #534AB7; stroke-width: 0.9; }
+    .o-cell { fill: #E1F5EE; stroke: #0F6E56; stroke-width: 0.9; }
+    .panel-line { stroke: #C7C5BD; stroke-width: 0.8; }
+    .win-line { stroke: #0F6E56; stroke-width: 5; stroke-linecap: round; opacity: 0.72; }
+    .tick { stroke: #5F5E5A; stroke-width: 1.4; stroke-linecap: round; }
+    .tick-active { stroke: #0F6E56; stroke-width: 2.2; stroke-linecap: round; }
+    .play { fill: #0F6E56; }
+    .file { fill: #F1EFE8; stroke: #5F5E5A; stroke-width: 1; stroke-linejoin: round; }
+    .rule { stroke: #0F6E56; stroke-width: 2; stroke-linecap: round; }
+    .dot { fill: #5F5E5A; opacity: 0.5; }
+    .win-chip { fill: #E1F5EE; stroke: #0F6E56; stroke-width: 0.8; }
+    .draw-chip { fill: #F1EFE8; stroke: #5F5E5A; stroke-width: 0.8; }
+    .loss-chip { fill: #EEEDFE; stroke: #534AB7; stroke-width: 0.8; }
+
+    @media (prefers-color-scheme: dark) {
+      .title { fill: #E5E5E2; }
+      .subtitle { fill: #B4B2A9; }
+      .eyebrow { fill: #5DCAA5; }
+      .label { fill: #B4B2A9; }
+      .small { fill: #C7C5BD; }
+      .mark-x { fill: #AFA9EC; }
+      .mark-o { fill: #5DCAA5; }
+      .eval-win { fill: #5DCAA5; }
+      .eval-draw { fill: #C7C5BD; }
+      .eval-loss { fill: #AFA9EC; }
+      .file-name { fill: #E5E5E2; }
+
+      .terminal { fill: #20201E; stroke: #B4B2A9; }
+      .panel { fill: #3A3A37; stroke: #5F5E5A; }
+      .board-cell { fill: #282826; stroke: #5F5E5A; }
+      .x-cell { fill: #3C3489; stroke: #AFA9EC; }
+      .o-cell { fill: #085041; stroke: #5DCAA5; }
+      .panel-line { stroke: #5F5E5A; }
+      .win-line { stroke: #5DCAA5; }
+      .tick { stroke: #B4B2A9; }
+      .tick-active { stroke: #5DCAA5; }
+      .play { fill: #5DCAA5; }
+      .file { fill: #3A3A37; stroke: #B4B2A9; }
+      .rule { stroke: #5DCAA5; }
+      .dot { fill: #B4B2A9; }
+      .win-chip { fill: #085041; stroke: #5DCAA5; }
+      .draw-chip { fill: #3A3A37; stroke: #B4B2A9; }
+      .loss-chip { fill: #3C3489; stroke: #AFA9EC; }
+    }
+  </style>
+
+  <!-- Title block -->
+  <text class="eyebrow" x="50" y="100">TERMINAL STRATEGY GAME</text>
+  <text class="title" x="46" y="166">rs-tic-tac-toe</text>
+  <text class="subtitle" x="50" y="207">Tic-tac-toe in your terminal — play, analyse, replay</text>
+  <path class="rule" d="M50 236 H420"/>
+
+  <!-- Terminal frame -->
+  <rect class="terminal" x="486" y="28" width="674" height="304" rx="14"/>
+  <path class="panel-line" d="M486 74 H1160"/>
+  <circle class="dot" cx="510" cy="51" r="4"/>
+  <circle class="dot" cx="526" cy="51" r="4"/>
+  <circle class="dot" cx="542" cy="51" r="4"/>
+  <text class="label" x="571" y="55">RS-TIC-TAC-TOE · REPLAY</text>
+  <text class="small mono" x="1128" y="55" text-anchor="end">turn 5</text>
+
+  <!-- Three-by-three board -->
+  <rect class="panel" x="508" y="90" width="310" height="158" rx="8"/>
+  <text class="label" x="524" y="112">BOARD</text>
+
+  <rect class="x-cell" x="544" y="122" width="45" height="34" rx="5"/>
+  <rect class="o-cell" x="594" y="122" width="45" height="34" rx="5"/>
+  <rect class="x-cell" x="644" y="122" width="45" height="34" rx="5"/>
+  <rect class="board-cell" x="544" y="161" width="45" height="34" rx="5"/>
+  <rect class="x-cell" x="594" y="161" width="45" height="34" rx="5"/>
+  <rect class="board-cell" x="644" y="161" width="45" height="34" rx="5"/>
+  <rect class="board-cell" x="544" y="200" width="45" height="34" rx="5"/>
+  <rect class="board-cell" x="594" y="200" width="45" height="34" rx="5"/>
+  <rect class="o-cell" x="644" y="200" width="45" height="34" rx="5"/>
+
+  <text class="mark-x mono" x="566.5" y="149" text-anchor="middle">X</text>
+  <text class="mark-o mono" x="616.5" y="149" text-anchor="middle">O</text>
+  <text class="mark-x mono" x="666.5" y="149" text-anchor="middle">X</text>
+  <text class="mark-x mono" x="616.5" y="188" text-anchor="middle">X</text>
+  <text class="mark-o mono" x="666.5" y="227" text-anchor="middle">O</text>
+
+  <!-- Evaluation panel -->
+  <rect class="panel" x="836" y="90" width="298" height="158" rx="8"/>
+  <text class="label" x="852" y="112">MOVE EVALUATION</text>
+
+  <rect class="draw-chip" x="852" y="125" width="266" height="30" rx="5"/>
+  <text class="eval-draw mono" x="866" y="145">DRAW</text>
+  <text class="small mono" x="1102" y="145" text-anchor="end">a3</text>
+
+  <rect class="loss-chip" x="852" y="164" width="266" height="30" rx="5"/>
+  <text class="eval-loss mono" x="866" y="184">LOSS</text>
+  <text class="small mono" x="1102" y="184" text-anchor="end">a2 · 2</text>
+
+  <rect class="loss-chip" x="852" y="203" width="266" height="30" rx="5"/>
+  <text class="eval-loss mono" x="866" y="223">LOSS</text>
+  <text class="small mono" x="1102" y="223" text-anchor="end">c2 · 2</text>
+
+  <!-- Replay strip -->
+  <rect class="panel" x="508" y="263" width="404" height="48" rx="8"/>
+  <text class="small mono" x="527" y="293">▶ 5/7</text>
+  <path class="tick-active" d="M614 281 V297 M650 281 V297 M686 281 V297 M722 281 V297 M758 281 V297"/>
+  <path class="tick" d="M794 281 V297 M830 281 V297"/>
+  <path class="tick-active" d="M614 305 H758"/>
+
+  <!-- Record file -->
+  <rect class="panel" x="930" y="263" width="204" height="48" rx="8"/>
+  <path class="file" d="M946 271 H963 L971 279 V303 H946 Z M963 271 V279 H971"/>
+  <path class="panel-line" d="M951 286 H966 M951 292 H966"/>
+  <text class="file-name mono" x="982" y="293">game.tttrec</text>
+</svg>

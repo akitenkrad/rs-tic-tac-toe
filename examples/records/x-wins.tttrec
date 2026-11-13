@@ -1,0 +1,12 @@
+# rs-tic-tac-toe record v1
+first = human
+human = Alice
+cpu = Bob
+
+a1
+b2
+c3
+c1
+a3
+a2
+b3

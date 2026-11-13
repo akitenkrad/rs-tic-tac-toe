@@ -1,0 +1,14 @@
+# rs-tic-tac-toe record v1
+first = human
+human = Alice
+cpu = Perfect CPU
+
+b2
+a1
+c3
+a3
+a2
+c2
+c1
+b3
+b1

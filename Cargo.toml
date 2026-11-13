@@ -1,0 +1,12 @@
+[package]
+name = "rs-tic-tac-toe"
+version = "0.1.0"
+edition = "2024"
+description = "Tic-tac-toe in your terminal: play, analyse, and replay recorded games"
+license = "MIT"
+repository = "https://github.com/akitenkrad/rs-tic-tac-toe"
+readme = "README.md"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+ratatui = "0.30"
