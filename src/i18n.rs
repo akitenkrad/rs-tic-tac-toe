@@ -162,6 +162,7 @@ pub enum Msg {
     EndOfRecord,
     Paused,
     Playing,
+    Finished,
     Speed,
     Turn,
     BoardEvaluation,
@@ -194,7 +195,7 @@ pub enum Msg {
 }
 
 impl Msg {
-    pub const ALL: [Self; 50] = [
+    pub const ALL: [Self; 51] = [
         Self::TitleSubtitle,
         Self::StartGame,
         Self::Difficulty,
@@ -216,6 +217,7 @@ impl Msg {
         Self::EndOfRecord,
         Self::Paused,
         Self::Playing,
+        Self::Finished,
         Self::Speed,
         Self::Turn,
         Self::BoardEvaluation,
@@ -291,6 +293,8 @@ impl Msg {
             (Self::Paused, Lang::Ja) => "一時停止",
             (Self::Playing, Lang::En) => "Playing",
             (Self::Playing, Lang::Ja) => "再生中",
+            (Self::Finished, Lang::En) => "Finished",
+            (Self::Finished, Lang::Ja) => "再生終了",
             (Self::Speed, Lang::En) => "Speed",
             (Self::Speed, Lang::Ja) => "速度",
             (Self::Turn, Lang::En) => "Turn",

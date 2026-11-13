@@ -85,7 +85,10 @@ pub fn draw(frame: &mut Frame, app: &App) {
     }
     draw_particles(frame.buffer_mut(), app, area);
     if app.screen == Screen::GameOver {
-        draw_result(frame, app, area);
+        let [_, middle, _] = Layout::vertical([Constraint::Length(3), Constraint::Fill(1), Constraint::Length(4)]).areas(area);
+        let [_, side] = Layout::horizontal([Constraint::Fill(1), Constraint::Length(32)]).areas(middle);
+        let [result, _] = Layout::vertical([Constraint::Length(9), Constraint::Fill(1)]).areas(side);
+        draw_result(frame, app, result);
     }
 }
 
@@ -156,7 +159,12 @@ fn draw_game(frame: &mut Frame, app: &App, area: Rect) {
     draw_status(frame, app, status);
     let [board, side] = Layout::horizontal([Constraint::Fill(1), Constraint::Length(32)]).areas(middle);
     draw_board(frame, app, board);
-    draw_side(frame, app, side);
+    if app.screen == Screen::GameOver {
+        let [_, log] = Layout::vertical([Constraint::Length(9), Constraint::Fill(1)]).areas(side);
+        draw_move_log(frame, app, log);
+    } else {
+        draw_side(frame, app, side);
+    }
     draw_help(frame, app, help);
 }
 
@@ -166,7 +174,13 @@ fn draw_status(frame: &mut Frame, app: &App, area: Rect) {
         Style::new().fg(c(BG)).bg(c(ACCENT)).add_modifier(Modifier::BOLD),
     )];
     if let Some(replay) = app.replay() {
-        let state = if replay.paused { Msg::Paused } else { Msg::Playing };
+        let state = if replay.position == replay.record.moves.len() {
+            Msg::Finished
+        } else if replay.paused {
+            Msg::Paused
+        } else {
+            Msg::Playing
+        };
         spans.extend([
             Span::styled(format!("  {}", state.text(app.lang)), fg(ACCENT).add_modifier(Modifier::BOLD)),
             Span::styled(
@@ -293,6 +307,11 @@ fn evaluation_label(evaluation: Evaluation, lang: Lang) -> (String, Rgb) {
 }
 
 fn draw_side(frame: &mut Frame, app: &App, area: Rect) {
+    if app.replay().is_some() {
+        draw_move_log(frame, app, area);
+        return;
+    }
+
     let [info, stats, log] = Layout::vertical([Constraint::Length(6), Constraint::Length(5), Constraint::Fill(1)]).areas(area);
     let human_mark = app.human_mark();
     let hint = match &app.hint {
@@ -327,7 +346,11 @@ fn draw_side(frame: &mut Frame, app: &App, area: Rect) {
         stats,
     );
 
-    let rows = log.height.saturating_sub(2) as usize;
+    draw_move_log(frame, app, log);
+}
+
+fn draw_move_log(frame: &mut Frame, app: &App, area: Rect) {
+    let rows = area.height.saturating_sub(2) as usize;
     let start = app.log.len().saturating_sub(rows);
     let lines = app.log[start..]
         .iter()
@@ -340,7 +363,7 @@ fn draw_side(frame: &mut Frame, app: &App, area: Rect) {
             ])
         })
         .collect::<Vec<_>>();
-    frame.render_widget(Paragraph::new(lines).block(panel(Msg::MoveLog.text(app.lang))), log);
+    frame.render_widget(Paragraph::new(lines).block(panel(Msg::MoveLog.text(app.lang))), area);
 }
 
 fn draw_help(frame: &mut Frame, app: &App, area: Rect) {
@@ -409,8 +432,7 @@ fn draw_particles(buffer: &mut Buffer, app: &App, area: Rect) {
     }
 }
 
-fn draw_result(frame: &mut Frame, app: &App, area: Rect) {
-    let rect = centered(area, 46, 9);
+fn draw_result(frame: &mut Frame, app: &App, rect: Rect) {
     let (headline, color) = match app.game.outcome() {
         Some(Outcome::Win { side, .. }) => (app.message.clone(), mark_color(app.game.mark_for(side))),
         Some(Outcome::Draw) => (app.message.clone(), PURPLE),
@@ -498,6 +520,12 @@ mod tests {
             output.push('\n');
         }
         output
+    }
+
+    fn render_buffer(app: &App, width: u16, height: u16) -> Buffer {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+        terminal.draw(|frame| draw(frame, app)).unwrap();
+        terminal.backend().buffer().clone()
     }
 
     fn assert_within_width(screen: &str, width: u16) {
@@ -650,6 +678,113 @@ mod tests {
     }
 
     #[test]
+    fn game_over_result_stays_in_side_column_and_leaves_winning_cells_visible() {
+        for lang in [Lang::En, Lang::Ja] {
+            let normal = completed_app(Side::Human, &[0, 3, 1, 4, 2], Msg::HumanWins.text(lang), lang);
+            let mut replay = App::new_replay(replay_record(true), Duration::from_millis(1_500), true, false, lang);
+            replay.on_key(KeyEvent::from(KeyCode::End));
+
+            for app in [&normal, &replay] {
+                let buffer = render_buffer(app, MIN_WIDTH, MIN_HEIGHT);
+                let result_left = buffer
+                    .content
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, cell)| cell.symbol() == "╔")
+                    .map(|(index, _)| index as u16 % MIN_WIDTH)
+                    .min()
+                    .expect("result panel has a double border");
+                let side_left = MIN_WIDTH - 32;
+                assert!(result_left >= side_left, "result starts at {result_left}, before side column {side_left}");
+
+                // The winning X marks fill five centre-tint cells in each top-row board cell.
+                // A popup over the board clears some of those cells.
+                let board_origin = (6, 4);
+                for cell in 0..3 {
+                    let cell_x = board_origin.0 + cell * 12;
+                    let mark_pixels = (board_origin.1..board_origin.1 + 5)
+                        .flat_map(|y| (cell_x..cell_x + 11).map(move |x| (x, y)))
+                        .filter(|&(x, y)| buffer[(x, y)].bg == c(X_COLOR))
+                        .count();
+                    assert_eq!(mark_pixels, 5, "winning cell {cell} was obscured");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn minimum_size_game_over_result_keeps_all_text_in_both_modes_and_languages() {
+        for lang in [Lang::En, Lang::Ja] {
+            let normal = completed_app(Side::Human, &[0, 3, 1, 4, 2], Msg::HumanWins.text(lang), lang);
+            let normal_screen = render(&normal, MIN_WIDTH, MIN_HEIGHT);
+            for expected in [
+                Msg::HumanWins.text(lang),
+                Msg::NewGame.text(lang),
+                Msg::Title.text(lang),
+                if lang == Lang::En { "Moves 5" } else { "手数 5" },
+            ] {
+                assert!(normal_screen.contains(expected), "missing {expected:?}: {normal_screen}");
+            }
+
+            let mut replay = App::new_replay(replay_record(true), Duration::from_millis(1_500), true, false, lang);
+            replay.on_key(KeyEvent::from(KeyCode::End));
+            let replay_screen = render(&replay, MIN_WIDTH, MIN_HEIGHT);
+            for expected in [
+                if lang == Lang::En { "Alice wins" } else { "Alice の勝ち" },
+                Msg::Back.text(lang),
+                Msg::Quit.text(lang),
+                if lang == Lang::En { "Moves 5" } else { "手数 5" },
+            ] {
+                assert!(replay_screen.contains(expected), "missing {expected:?}: {replay_screen}");
+            }
+        }
+    }
+
+    #[test]
+    fn replay_omits_play_only_side_information_while_normal_play_keeps_it() {
+        for lang in [Lang::En, Lang::Ja] {
+            let mut normal = App::with_lang(lang);
+            normal.start();
+            let normal_screen = render(&normal, MIN_WIDTH, MIN_HEIGHT);
+            for expected in [
+                Msg::Difficulty.text(lang),
+                Msg::SessionScore.text(lang),
+                if lang == Lang::En { "h: Hint" } else { "h: ヒント" },
+            ] {
+                assert!(normal_screen.contains(expected), "missing {expected:?}: {normal_screen}");
+            }
+
+            let replay = App::new_replay(replay_record(true), Duration::from_millis(1_500), true, false, lang);
+            let replay_screen = render(&replay, MIN_WIDTH, MIN_HEIGHT);
+            for absent in [
+                Msg::Difficulty.text(lang),
+                Msg::SessionScore.text(lang),
+                if lang == Lang::En { "h: Hint" } else { "h: ヒント" },
+            ] {
+                assert!(!replay_screen.contains(absent), "unexpected {absent:?}: {replay_screen}");
+            }
+        }
+    }
+
+    #[test]
+    fn replay_header_is_finished_at_end_and_playing_after_step_back() {
+        for (lang, finished, playing) in [(Lang::En, "Finished", "Playing"), (Lang::Ja, "再生終了", "再生中")] {
+            for paused in [false, true] {
+                let mut app = App::new_replay(replay_record(true), Duration::from_millis(1_500), paused, false, lang);
+                app.on_key(KeyEvent::from(KeyCode::End));
+                let screen = render(&app, MIN_WIDTH, MIN_HEIGHT);
+                assert!(screen.contains(finished), "missing {finished:?}: {screen}");
+
+                app.on_key(KeyEvent::from(KeyCode::Left));
+                let expected = if paused { Msg::Paused.text(lang) } else { playing };
+                let screen = render(&app, MIN_WIDTH, MIN_HEIGHT);
+                assert!(screen.contains(expected), "missing {expected:?}: {screen}");
+                assert!(!screen.contains(finished), "unexpected {finished:?}: {screen}");
+            }
+        }
+    }
+
+    #[test]
     #[ignore]
     fn dump_screens() {
         for lang in [Lang::En, Lang::Ja] {
@@ -658,6 +793,10 @@ mod tests {
             app.start();
             app.show_evaluation = true;
             println!("{}", render(&app, MIN_WIDTH, MIN_HEIGHT));
+
+            let mut replay = App::new_replay(replay_record(true), Duration::from_millis(1_500), false, false, lang);
+            replay.on_key(KeyEvent::from(KeyCode::End));
+            println!("{}", render(&replay, MIN_WIDTH, MIN_HEIGHT));
         }
     }
 
