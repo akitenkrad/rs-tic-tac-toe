@@ -2,6 +2,8 @@
 
 use std::collections::HashMap;
 
+use crate::i18n::Lang;
+
 /// 盤上の印．先手は常に `X` を使う．
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Mark {
@@ -33,10 +35,10 @@ impl Side {
         }
     }
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self, lang: Lang) -> &'static str {
         match self {
-            Self::Human => "あなた",
-            Self::Cpu => "CPU",
+            Self::Human => lang.default_human_name(),
+            Self::Cpu => lang.default_cpu_name(),
         }
     }
 }

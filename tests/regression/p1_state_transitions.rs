@@ -1,6 +1,7 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use rs_tic_tac_toe::app::App;
 use rs_tic_tac_toe::game::Side;
+use rs_tic_tac_toe::i18n::Lang;
 use rs_tic_tac_toe::record::Record;
 use std::time::Duration;
 
@@ -39,10 +40,10 @@ fn changing_number_selection_does_not_place_until_confirmation() {
 fn replay_backward_cancels_the_active_placement() {
     let record = Record {
         first: Side::Human,
-        names: ["Alice".into(), "Bob".into()],
+        names: [Some("Alice".into()), Some("Bob".into())],
         moves: vec![0, 4, 1],
     };
-    let mut app = App::new_replay(record, Duration::from_millis(1_500), true, false);
+    let mut app = App::new_replay(record, Duration::from_millis(1_500), true, false, Lang::En);
     press(&mut app, KeyCode::Right);
     assert!(app.placement.is_some());
     press(&mut app, KeyCode::Left);

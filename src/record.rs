@@ -5,13 +5,14 @@ use std::error::Error;
 use std::fmt;
 
 use crate::game::{Game, MoveError, Side, cell_name, parse_cell};
+use crate::i18n::Lang;
 
 /// 先手，表示名，着手列を保持する棋譜．
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Record {
     pub first: Side,
     /// `[人間側, CPU側]` の表示名．
-    pub names: [String; 2],
+    pub names: [Option<String>; 2],
     pub moves: Vec<usize>,
 }
 
@@ -22,11 +23,12 @@ impl Record {
     }
 
     /// 対局者の表示名を返す．
-    pub fn name(&self, side: Side) -> &str {
-        match side {
-            Side::Human => &self.names[0],
-            Side::Cpu => &self.names[1],
-        }
+    pub fn name(&self, side: Side, lang: Lang) -> &str {
+        let index = usize::from(side == Side::Cpu);
+        self.names[index].as_deref().unwrap_or_else(|| match side {
+            Side::Human => lang.default_human_name(),
+            Side::Cpu => lang.default_cpu_name(),
+        })
     }
 }
 
@@ -81,7 +83,7 @@ impl Error for RecordError {}
 /// UTF-8 の `.tttrec` テキストを解析する．
 pub fn parse(text: &str) -> Result<Record, RecordError> {
     let mut first = Side::Human;
-    let mut names = ["あなた".to_string(), "CPU".to_string()];
+    let mut names = [None, None];
     let mut moves = Vec::new();
     let mut game = Game::new(first);
     let mut seen_keys = HashSet::new();
@@ -124,7 +126,7 @@ pub fn parse(text: &str) -> Result<Record, RecordError> {
                     if value.is_empty() {
                         return Err(RecordError::EmptyName { line, key: key.to_string() });
                     }
-                    names[usize::from(key == "cpu")] = value.to_string();
+                    names[usize::from(key == "cpu")] = Some(value.to_string());
                 }
                 _ => unreachable!(),
             }
@@ -160,10 +162,14 @@ pub fn to_text(record: &Record) -> String {
         Side::Human => "human",
         Side::Cpu => "cpu",
     };
-    let mut text = format!(
-        "# rs-tic-tac-toe record v1\nfirst = {first}\nhuman = {}\ncpu = {}\n\n",
-        record.names[0], record.names[1]
-    );
+    let mut text = format!("# rs-tic-tac-toe record v1\nfirst = {first}\n");
+    if let Some(name) = record.names[0].as_deref().filter(|name| !matches!(*name, "You" | "あなた")) {
+        text.push_str(&format!("human = {name}\n"));
+    }
+    if let Some(name) = record.names[1].as_deref().filter(|name| *name != "CPU") {
+        text.push_str(&format!("cpu = {name}\n"));
+    }
+    text.push('\n');
     for &cell in &record.moves {
         text.push_str(&cell_name(cell));
         text.push('\n');
@@ -209,7 +215,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(record.first, Side::Cpu);
-        assert_eq!(record.names, ["Alice", "Bob"]);
+        assert_eq!(record.names, [Some("Alice".into()), Some("Bob".into())]);
         assert_eq!(record.moves, vec![0, 4, 8]);
     }
 
@@ -217,7 +223,7 @@ mod tests {
     fn applies_header_defaults_and_ignores_comments_and_blank_lines() {
         let record = parse("# comment\n\na1 # opening\nB2\n").unwrap();
         assert_eq!(record.first, Side::Human);
-        assert_eq!(record.names, ["あなた", "CPU"]);
+        assert_eq!(record.names, [None, None]);
         assert_eq!(record.moves, vec![0, 4]);
     }
 
@@ -301,7 +307,7 @@ mod tests {
     fn to_text_uses_coordinates_and_round_trips() {
         let original = Record {
             first: Side::Cpu,
-            names: ["Alice Smith".into(), "Bob CPU".into()],
+            names: [Some("Alice Smith".into()), Some("Bob CPU".into())],
             moves: vec![0, 4, 8],
         };
         let text = to_text(&original);

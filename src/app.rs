@@ -7,6 +7,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::ai::{self, Difficulty, Rng};
 use crate::game::{Evaluation, Game, Mark, Outcome, Side, best_moves, solve};
+use crate::i18n::{Lang, Msg};
 use crate::record::{Record, to_text};
 
 /// CPU が考えているふりをする時間．
@@ -82,6 +83,7 @@ pub struct Particle {
 }
 
 pub struct App {
+    pub lang: Lang,
     pub mode: Mode,
     pub screen: Screen,
     pub game: Game,
@@ -122,6 +124,7 @@ impl Default for App {
 impl App {
     pub fn new() -> Self {
         Self {
+            lang: Lang::default(),
             mode: Mode::Normal,
             screen: Screen::Title,
             game: Game::new(Side::Human),
@@ -145,15 +148,19 @@ impl App {
         }
     }
 
+    pub fn with_lang(lang: Lang) -> Self {
+        Self { lang, ..Self::new() }
+    }
+
     /// 棋譜を先頭局面から再生する App を作る．
-    pub fn new_replay(record: Record, interval: Duration, paused: bool, exit_on_end: bool) -> Self {
+    pub fn new_replay(record: Record, interval: Duration, paused: bool, exit_on_end: bool, lang: Lang) -> Self {
         let interval = interval.max(PLACEMENT_ANIM);
         let game = record.game_at(0).expect("parsed records have an initial position");
-        let mut app = Self::new();
+        let mut app = Self::with_lang(lang);
         app.screen = Screen::Playing;
         app.first = record.first;
         app.game = game;
-        app.message = "棋譜の先頭です".into();
+        app.message = Msg::RecordStart.text(lang).into();
         app.mode = Mode::Replay(ReplayState {
             record,
             position: 0,
@@ -185,11 +192,8 @@ impl App {
 
     pub fn side_name(&self, side: Side) -> &str {
         match &self.mode {
-            Mode::Normal => side.label(),
-            Mode::Replay(replay) => match side {
-                Side::Human => &replay.record.names[0],
-                Side::Cpu => &replay.record.names[1],
-            },
+            Mode::Normal => side.label(self.lang),
+            Mode::Replay(replay) => replay.record.name(side, self.lang),
         }
     }
 
@@ -237,6 +241,7 @@ impl App {
             KeyCode::Enter | KeyCode::Char(' ') => self.start(),
             KeyCode::Char('d') => self.difficulty = self.difficulty.next(),
             KeyCode::Char('f') => self.first = self.first.other(),
+            KeyCode::Char('l') => self.lang = self.lang.toggle(),
             _ => {}
         }
     }
@@ -305,7 +310,7 @@ impl App {
         let by = self.game.to_move;
         let mark = self.game.mark_for(by);
         if self.game.apply(cell).is_err() {
-            self.message = "そのマスには置けません".into();
+            self.message = Msg::CellUnavailable.text(self.lang).into();
             return;
         }
         self.log.push((by, mark, cell));
@@ -319,13 +324,13 @@ impl App {
             by,
             started: Instant::now(),
         });
-        self.message = format!("{} が {} に置きました", self.side_name(by), crate::game::cell_name(cell));
+        self.message = self.lang.placed(self.side_name(by), &crate::game::cell_name(cell));
     }
 
     fn update_message(&mut self) {
         self.message = match self.game.to_move {
-            Side::Human => "あなたの番です．マスを選んで Enter".into(),
-            Side::Cpu => "CPU が考えています".into(),
+            Side::Human => Msg::HumanTurn.text(self.lang).into(),
+            Side::Cpu => Msg::CpuThinking.text(self.lang).into(),
         };
     }
 
@@ -395,18 +400,18 @@ impl App {
         match outcome {
             Outcome::Win { side: Side::Human, .. } => {
                 self.stats.wins += 1;
-                self.message = "あなたの勝ち！".into();
+                self.message = Msg::HumanWins.text(self.lang).into();
                 for _ in 0..140 {
                     self.spawn_confetti(-0.6);
                 }
             }
             Outcome::Win { side: Side::Cpu, .. } => {
                 self.stats.losses += 1;
-                self.message = "CPU の勝ち".into();
+                self.message = Msg::CpuWins.text(self.lang).into();
             }
             Outcome::Draw => {
                 self.stats.draws += 1;
-                self.message = "引き分け".into();
+                self.message = Msg::Draw.text(self.lang).into();
             }
         }
     }
@@ -491,7 +496,7 @@ impl App {
         if at_end {
             self.finish_replay();
         } else {
-            self.message = format!("{position} 手目を表示しています");
+            self.message = self.lang.showing_move(position);
         }
     }
 
@@ -532,9 +537,9 @@ impl App {
         self.cpu = None;
         self.placement = None;
         self.message = match self.game.outcome() {
-            Some(Outcome::Win { side, .. }) => format!("{} の勝ち", self.side_name(side)),
-            Some(Outcome::Draw) => "引き分け".into(),
-            None => "棋譜の終わり".into(),
+            Some(Outcome::Win { side, .. }) => self.lang.winner(self.side_name(side)),
+            Some(Outcome::Draw) => Msg::Draw.text(self.lang).into(),
+            None => Msg::EndOfRecord.text(self.lang).into(),
         };
     }
 
@@ -544,14 +549,14 @@ impl App {
         }
         let record = Record {
             first: self.first,
-            names: ["あなた".into(), "CPU".into()],
+            names: [None, None],
             moves: self.game.history.iter().map(|&(_, cell)| cell).collect(),
         };
         let seconds = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |time| time.as_secs());
         let path = self.record_dir.join(format!("ttt-{seconds}.tttrec"));
         self.message = match std::fs::write(&path, to_text(&record)) {
-            Ok(()) => format!("棋譜を保存しました: {}", display_path(&path)),
-            Err(error) => format!("棋譜の保存に失敗しました: {error}"),
+            Ok(()) => self.lang.record_saved(&display_path(&path)),
+            Err(error) => self.lang.record_save_failed(error),
         };
     }
 
@@ -621,6 +626,7 @@ fn rng_unit(rng: &mut Rng) -> f32 {
 mod tests {
     use super::*;
     use crate::game::{Game, Mark, Outcome, Side};
+    use crate::i18n::Lang;
     use crate::record::{Record, parse};
     use ratatui::crossterm::event::{KeyCode, KeyEvent};
     use std::fs;
@@ -633,7 +639,7 @@ mod tests {
     fn complete_record() -> Record {
         Record {
             first: Side::Human,
-            names: ["Alice".into(), "Bob".into()],
+            names: [Some("Alice".into()), Some("Bob".into())],
             moves: vec![0, 3, 1, 4, 2],
         }
     }
@@ -641,7 +647,7 @@ mod tests {
     fn unfinished_record() -> Record {
         Record {
             first: Side::Cpu,
-            names: ["Alice".into(), "Bob".into()],
+            names: [Some("Alice".into()), Some("Bob".into())],
             moves: vec![4, 0, 8],
         }
     }
@@ -670,7 +676,7 @@ mod tests {
     #[test]
     fn replay_navigation_reconstructs_board_and_history() {
         let record = complete_record();
-        let mut app = App::new_replay(record.clone(), Duration::from_millis(10), true, false);
+        let mut app = App::new_replay(record.clone(), Duration::from_millis(10), true, false, Lang::En);
 
         assert_game_matches(&app.game, &record.game_at(0).unwrap());
         app.on_key(key(KeyCode::Right));
@@ -692,7 +698,7 @@ mod tests {
 
     #[test]
     fn autoplay_waits_for_interval_and_placement_without_cpu_thinking() {
-        let mut app = App::new_replay(complete_record(), PLACEMENT_ANIM + Duration::from_millis(200), false, false);
+        let mut app = App::new_replay(complete_record(), PLACEMENT_ANIM + Duration::from_millis(200), false, false, Lang::En);
         app.replay_mut().unwrap().next_advance_at = Instant::now() - Duration::from_millis(1);
 
         app.on_tick();
@@ -715,7 +721,7 @@ mod tests {
 
     #[test]
     fn replay_interval_is_clamped_to_placement_animation() {
-        let mut app = App::new_replay(complete_record(), Duration::from_millis(1), true, false);
+        let mut app = App::new_replay(complete_record(), Duration::from_millis(1), true, false, Lang::En);
         assert_eq!(app.replay().unwrap().interval, PLACEMENT_ANIM);
         app.on_key(key(KeyCode::Char('+')));
         assert_eq!(app.replay().unwrap().interval, PLACEMENT_ANIM);
@@ -725,27 +731,27 @@ mod tests {
 
     #[test]
     fn replay_end_distinguishes_winner_and_unfinished_record() {
-        let mut complete = App::new_replay(complete_record(), Duration::from_millis(1_500), true, false);
+        let mut complete = App::new_replay(complete_record(), Duration::from_millis(1_500), true, false, Lang::En);
         complete.on_key(key(KeyCode::End));
         assert_eq!(complete.screen, Screen::GameOver);
-        assert_eq!(complete.message, "Alice の勝ち");
+        assert_eq!(complete.message, "Alice wins");
 
-        let mut unfinished = App::new_replay(unfinished_record(), Duration::from_millis(1_500), true, false);
+        let mut unfinished = App::new_replay(unfinished_record(), Duration::from_millis(1_500), true, false, Lang::En);
         unfinished.on_key(key(KeyCode::End));
         assert_eq!(unfinished.screen, Screen::GameOver);
-        assert_eq!(unfinished.message, "棋譜の終わり");
+        assert_eq!(unfinished.message, "End of record");
         assert_eq!(unfinished.game.outcome(), None);
     }
 
     #[test]
     fn exit_on_end_only_quits_after_a_finished_record() {
-        let mut complete = App::new_replay(complete_record(), Duration::from_millis(1_500), true, true);
+        let mut complete = App::new_replay(complete_record(), Duration::from_millis(1_500), true, true, Lang::En);
         complete.on_key(key(KeyCode::End));
         complete.game_over_at = Some(Instant::now() - Duration::from_secs(3));
         complete.on_tick();
         assert!(complete.should_quit);
 
-        let mut unfinished = App::new_replay(unfinished_record(), Duration::from_millis(1_500), true, true);
+        let mut unfinished = App::new_replay(unfinished_record(), Duration::from_millis(1_500), true, true, Lang::En);
         unfinished.on_key(key(KeyCode::End));
         unfinished.game_over_at = Some(Instant::now() - Duration::from_secs(3));
         unfinished.on_tick();
@@ -766,16 +772,19 @@ mod tests {
         app.on_key(key(KeyCode::Char('s')));
 
         let path = fs::read_dir(&dir).unwrap().next().unwrap().unwrap().path();
-        let saved = parse(&fs::read_to_string(path).unwrap()).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(!text.contains("human ="), "{text}");
+        assert!(!text.contains("cpu ="), "{text}");
+        let saved = parse(&text).unwrap();
         assert_eq!(saved.first, Side::Human);
         assert_eq!(saved.moves, vec![0]);
-        assert_eq!(saved.names, ["あなた", "CPU"]);
+        assert_eq!(saved.names, [None, None]);
 
         let not_a_directory = dir.join("file");
         fs::write(&not_a_directory, "x").unwrap();
         app.set_record_dir(not_a_directory);
         app.on_key(key(KeyCode::Char('s')));
-        assert!(app.message.contains("保存に失敗"), "{}", app.message);
+        assert!(app.message.contains("Failed to save"), "{}", app.message);
 
         fs::remove_dir_all(dir).unwrap();
     }

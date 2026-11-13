@@ -3,5 +3,6 @@
 pub mod ai;
 pub mod app;
 pub mod game;
+pub mod i18n;
 pub mod record;
 pub mod ui;

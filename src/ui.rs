@@ -11,6 +11,7 @@ use ratatui::{
 
 use crate::app::{App, Hint, Screen};
 use crate::game::{Evaluation, Mark, Outcome, Side, cell_name, solve};
+use crate::i18n::{Lang, Msg};
 
 type Rgb = (u8, u8, u8);
 
@@ -74,10 +75,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
     let area = frame.area();
     frame.render_widget(Block::new().style(Style::new().bg(c(BG)).fg(c(TEXT))), area);
     if area.width < MIN_WIDTH || area.height < MIN_HEIGHT {
-        let message = format!(
-            "端末を {MIN_WIDTH}x{MIN_HEIGHT} 以上に広げてください (現在 {}x{})",
-            area.width, area.height
-        );
+        let message = app.lang.resize(MIN_WIDTH, MIN_HEIGHT, area.width, area.height);
         frame.render_widget(Paragraph::new(message).alignment(Alignment::Center), centered(area, area.width, 1));
         return;
     }
@@ -121,7 +119,7 @@ fn draw_title(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(
         Paragraph::new(vec![
             Line::styled("rs-tic-tac-toe", fg(TEXT).add_modifier(Modifier::BOLD)),
-            Line::styled("三目並べ — 完全読みと棋譜再生", fg(DIM)),
+            Line::styled(Msg::TitleSubtitle.text(app.lang), fg(DIM)),
         ])
         .alignment(Alignment::Center),
         subtitle,
@@ -130,23 +128,24 @@ fn draw_title(frame: &mut Frame, app: &App, area: Rect) {
         Line::from(vec![
             Span::raw("  "),
             key(button),
-            Span::styled(format!("  {label:<12}"), fg(DIM)),
+            Span::styled(format!("  {label:<12}  "), fg(DIM)),
             Span::styled(value.to_string(), fg(TEXT).add_modifier(Modifier::BOLD)),
         ])
     };
     let lines = vec![
-        row("Enter", "ゲーム開始", ""),
-        row("d", "難易度", app.difficulty.label()),
-        row("f", "先手", app.first.label()),
-        row("q", "終了", ""),
+        row("Enter", Msg::StartGame.text(app.lang), ""),
+        row("d", Msg::Difficulty.text(app.lang), app.difficulty.label(app.lang)),
+        row("f", Msg::First.text(app.lang), app.first.label(app.lang)),
+        row("l", Msg::Language.text(app.lang), app.lang.label()),
+        row("q", Msg::Quit.text(app.lang), ""),
     ];
     frame.render_widget(
-        Paragraph::new(lines).block(panel(" 設定 ").padding(ratatui::widgets::Padding::vertical(1))),
+        Paragraph::new(lines).block(panel(Msg::Settings.text(app.lang)).padding(ratatui::widgets::Padding::vertical(1))),
         centered(menu, 54, 9),
     );
     if (app.frame / 18).is_multiple_of(2) {
         frame.render_widget(
-            Paragraph::new(Span::styled("Enter / Space で開始", fg(ACCENT).add_modifier(Modifier::BOLD))).alignment(Alignment::Center),
+            Paragraph::new(Span::styled(Msg::StartPrompt.text(app.lang), fg(ACCENT).add_modifier(Modifier::BOLD))).alignment(Alignment::Center),
             footer,
         );
     }
@@ -155,7 +154,7 @@ fn draw_title(frame: &mut Frame, app: &App, area: Rect) {
 fn draw_game(frame: &mut Frame, app: &App, area: Rect) {
     let [status, middle, help] = Layout::vertical([Constraint::Length(3), Constraint::Fill(1), Constraint::Length(4)]).areas(area);
     draw_status(frame, app, status);
-    let [board, side] = Layout::horizontal([Constraint::Fill(1), Constraint::Length(29)]).areas(middle);
+    let [board, side] = Layout::horizontal([Constraint::Fill(1), Constraint::Length(32)]).areas(middle);
     draw_board(frame, app, board);
     draw_side(frame, app, side);
     draw_help(frame, app, help);
@@ -167,26 +166,26 @@ fn draw_status(frame: &mut Frame, app: &App, area: Rect) {
         Style::new().fg(c(BG)).bg(c(ACCENT)).add_modifier(Modifier::BOLD),
     )];
     if let Some(replay) = app.replay() {
-        let state = if replay.paused { "一時停止" } else { "再生中" };
+        let state = if replay.paused { Msg::Paused } else { Msg::Playing };
         spans.extend([
-            Span::styled(format!("  {state}"), fg(ACCENT).add_modifier(Modifier::BOLD)),
-            Span::styled("  手数 ", fg(DIM)),
-            Span::styled(format!("{}/{}", replay.position, replay.record.moves.len()), fg(TEXT)),
-            Span::styled("  速度 ", fg(DIM)),
+            Span::styled(format!("  {}", state.text(app.lang)), fg(ACCENT).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!("  {} ", app.lang.replay_progress(replay.position, replay.record.moves.len())),
+                fg(TEXT),
+            ),
+            Span::styled(format!(" {} ", Msg::Speed.text(app.lang)), fg(DIM)),
             Span::styled(format!("{}ms", replay.interval.as_millis()), fg(TEXT)),
         ]);
     } else {
         let mark = app.game.mark_for(app.game.to_move);
         spans.extend([
-            Span::styled("  手番 ", fg(DIM)),
             Span::styled(
-                format!("{}の番 {}", app.side_name(app.game.to_move), mark_label(mark)),
+                format!("  {}", app.lang.turn(app.side_name(app.game.to_move), mark_label(mark))),
                 fg(mark_color(mark)).add_modifier(Modifier::BOLD),
             ),
-            Span::styled("  難易度 ", fg(DIM)),
-            Span::styled(app.difficulty.label(), fg(TEXT)),
-            Span::styled("  手数 ", fg(DIM)),
-            Span::styled(app.game.history.len().to_string(), fg(TEXT)),
+            Span::styled(format!("  {} ", Msg::Difficulty.text(app.lang)), fg(DIM)),
+            Span::styled(app.difficulty.label(app.lang), fg(TEXT)),
+            Span::styled(format!("  {}", app.lang.moves_count(app.game.history.len())), fg(TEXT)),
         ]);
     }
     frame.render_widget(Paragraph::new(Line::from(spans)).block(panel("")), area);
@@ -194,9 +193,9 @@ fn draw_status(frame: &mut Frame, app: &App, area: Rect) {
 
 fn draw_board(frame: &mut Frame, app: &App, area: Rect) {
     let title = if app.show_evaluation {
-        "局面評価 — 勝ち / 引分 / 負け"
+        Msg::BoardEvaluation.text(app.lang)
     } else {
-        "盤面"
+        Msg::Board.text(app.lang)
     };
     frame.render_widget(
         Paragraph::new(Span::styled(title, fg(TEXT).add_modifier(Modifier::BOLD))).alignment(Alignment::Center),
@@ -249,7 +248,7 @@ fn draw_cell(buffer: &mut Buffer, app: &App, cell: usize, area: Rect, evaluation
             .map_or(1.0, crate::app::Placement::progress);
         draw_mark(buffer, area, mark, progress);
     } else if let Some(evaluation) = evaluations.and_then(|items| items[cell]) {
-        let (label, color) = evaluation_label(evaluation);
+        let (label, color) = evaluation_label(evaluation, app.lang);
         let x = area.x + area.width.saturating_sub(label.chars().count() as u16) / 2;
         buffer.set_string(x, area.y + 2, label, fg(color).add_modifier(Modifier::BOLD));
     } else {
@@ -285,11 +284,11 @@ fn draw_mark(buffer: &mut Buffer, area: Rect, mark: Mark, progress: f32) {
     }
 }
 
-fn evaluation_label(evaluation: Evaluation) -> (String, Rgb) {
+fn evaluation_label(evaluation: Evaluation, lang: Lang) -> (String, Rgb) {
     match evaluation {
-        Evaluation::Win(turns) => (format!("勝ち {turns}"), X_COLOR),
-        Evaluation::Draw => ("引分".into(), PURPLE),
-        Evaluation::Loss(turns) => (format!("負け {turns}"), DANGER),
+        Evaluation::Win(turns) => (lang.evaluation(Msg::EvalWin, turns), X_COLOR),
+        Evaluation::Draw => (Msg::EvalDraw.text(lang).into(), PURPLE),
+        Evaluation::Loss(turns) => (lang.evaluation(Msg::EvalLoss, turns), DANGER),
     }
 }
 
@@ -297,11 +296,11 @@ fn draw_side(frame: &mut Frame, app: &App, area: Rect) {
     let [info, stats, log] = Layout::vertical([Constraint::Length(6), Constraint::Length(5), Constraint::Fill(1)]).areas(area);
     let human_mark = app.human_mark();
     let hint = match &app.hint {
-        Hint::None => "h: ヒント".to_string(),
+        Hint::None => format!("h: {}", Msg::Hint.text(app.lang)),
         Hint::Moves { evaluation, .. } => match evaluation {
-            Evaluation::Win(_) => "勝てる手を強調中".into(),
-            Evaluation::Draw => "引き分けしかありません".into(),
-            Evaluation::Loss(_) => "負けを避けられません".into(),
+            Evaluation::Win(_) => Msg::HighlightWinning.text(app.lang).into(),
+            Evaluation::Draw => Msg::OnlyDraw.text(app.lang).into(),
+            Evaluation::Loss(_) => Msg::CannotAvoidLoss.text(app.lang).into(),
         },
     };
     let info_lines = vec![
@@ -313,14 +312,18 @@ fn draw_side(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled(format!(" {} ", app.side_name(Side::Cpu)), fg(DIM)),
             Span::styled(mark_label(app.game.mark_for(Side::Cpu)), fg(mark_color(app.game.mark_for(Side::Cpu)))),
         ]),
-        Line::from(vec![Span::styled(" 難易度 ", fg(DIM)), Span::styled(app.difficulty.label(), fg(TEXT))]),
+        Line::from(vec![
+            Span::styled(format!(" {} ", Msg::Difficulty.text(app.lang)), fg(DIM)),
+            Span::styled(app.difficulty.label(app.lang), fg(TEXT)),
+        ]),
         Line::styled(format!(" {hint}"), fg(ACCENT)),
     ];
-    frame.render_widget(Paragraph::new(info_lines).block(panel(" 状態 ")), info);
+    frame.render_widget(Paragraph::new(info_lines).block(panel(Msg::Status.text(app.lang))), info);
 
-    let stats_line = format!("  勝 {}   敗 {}   分 {}", app.stats.wins, app.stats.losses, app.stats.draws);
+    let stats_line = app.lang.stats(app.stats.wins, app.stats.losses, app.stats.draws);
     frame.render_widget(
-        Paragraph::new(vec![Line::raw(""), Line::styled(stats_line, fg(TEXT).add_modifier(Modifier::BOLD))]).block(panel(" セッション戦績 ")),
+        Paragraph::new(vec![Line::raw(""), Line::styled(stats_line, fg(TEXT).add_modifier(Modifier::BOLD))])
+            .block(panel(Msg::SessionScore.text(app.lang))),
         stats,
     );
 
@@ -337,35 +340,43 @@ fn draw_side(frame: &mut Frame, app: &App, area: Rect) {
             ])
         })
         .collect::<Vec<_>>();
-    frame.render_widget(Paragraph::new(lines).block(panel(" 着手ログ ")), log);
+    frame.render_widget(Paragraph::new(lines).block(panel(Msg::MoveLog.text(app.lang))), log);
 }
 
 fn draw_help(frame: &mut Frame, app: &App, area: Rect) {
     let (items, split): (&[(&str, &str)], usize) = if app.replay().is_some() {
         (
             &[
-                ("Space", "再生/停止"),
-                ("←→", "前後"),
-                ("Home/End", "先頭/末尾"),
-                ("+/-", "速度"),
-                ("e", "評価"),
-                ("q", "終了"),
+                ("Space", Msg::PlayPause.text(app.lang)),
+                ("←→", Msg::PreviousNext.text(app.lang)),
+                ("Home/End", Msg::BeginningEnd.text(app.lang)),
+                ("+/-", Msg::Speed.text(app.lang)),
+                ("e", Msg::Evaluation.text(app.lang)),
+                ("q", Msg::Quit.text(app.lang)),
             ],
             3,
         )
     } else if app.screen == Screen::GameOver {
-        (&[("Enter", "新しい対局"), ("s", "保存"), ("t", "タイトル"), ("q", "終了")], 4)
+        (
+            &[
+                ("Enter", Msg::NewGame.text(app.lang)),
+                ("s", Msg::Save.text(app.lang)),
+                ("t", Msg::Title.text(app.lang)),
+                ("q", Msg::Quit.text(app.lang)),
+            ],
+            4,
+        )
     } else {
         (
             &[
-                ("矢印/1-9", "選択"),
-                ("Enter", "置く"),
-                ("h", "ヒント"),
-                ("e", "評価"),
-                ("s", "保存"),
-                ("n", "新規"),
-                ("t", "タイトル"),
-                ("q", "終了"),
+                (Msg::ArrowKeys.text(app.lang), Msg::Select.text(app.lang)),
+                ("Enter", Msg::Place.text(app.lang)),
+                ("h", Msg::Hint.text(app.lang)),
+                ("e", Msg::Evaluation.text(app.lang)),
+                ("s", Msg::Save.text(app.lang)),
+                ("n", Msg::New.text(app.lang)),
+                ("t", Msg::Title.text(app.lang)),
+                ("q", Msg::Quit.text(app.lang)),
             ],
             4,
         )
@@ -410,22 +421,22 @@ fn draw_result(frame: &mut Frame, app: &App, area: Rect) {
         Line::raw(""),
         Line::styled(headline, fg(color).add_modifier(Modifier::BOLD)),
         Line::raw(""),
-        Line::styled(format!("手数 {}", app.game.history.len()), fg(TEXT)),
+        Line::styled(app.lang.moves_count(app.game.history.len()), fg(TEXT)),
         Line::raw(""),
     ];
     if app.replay().is_some() {
         lines.push(Line::from(vec![
             key("←"),
-            Span::styled(" 戻る   ", fg(DIM)),
+            Span::styled(format!(" {}   ", Msg::Back.text(app.lang)), fg(DIM)),
             key("q"),
-            Span::styled(" 終了", fg(DIM)),
+            Span::styled(format!(" {}", Msg::Quit.text(app.lang)), fg(DIM)),
         ]));
     } else {
         lines.push(Line::from(vec![
             key("Enter"),
-            Span::styled(" 新しい対局   ", fg(DIM)),
+            Span::styled(format!(" {}   ", Msg::NewGame.text(app.lang)), fg(DIM)),
             key("t"),
-            Span::styled(" タイトル", fg(DIM)),
+            Span::styled(format!(" {}", Msg::Title.text(app.lang)), fg(DIM)),
         ]));
     }
     frame.render_widget(Clear, rect);
@@ -452,6 +463,7 @@ mod tests {
     use super::*;
     use crate::app::{App, Screen};
     use crate::game::{Game, Side};
+    use crate::i18n::{Lang, Msg};
     use crate::record::Record;
     use ratatui::crossterm::event::{KeyCode, KeyEvent};
     use ratatui::{Terminal, backend::TestBackend};
@@ -488,8 +500,14 @@ mod tests {
         output
     }
 
-    fn completed_app(first: Side, moves: &[usize], message: &str) -> App {
-        let mut app = App::new();
+    fn assert_within_width(screen: &str, width: u16) {
+        for line in screen.lines() {
+            assert!(Line::raw(line).width() <= usize::from(width), "line exceeds {width} columns: {line:?}");
+        }
+    }
+
+    fn completed_app(first: Side, moves: &[usize], message: &str, lang: Lang) -> App {
+        let mut app = App::with_lang(lang);
         app.first = first;
         app.game = Game::new(first);
         for &cell in moves {
@@ -502,119 +520,169 @@ mod tests {
 
     #[test]
     fn minimum_size_renders_title_playing_and_evaluation_panel() {
-        let mut app = App::new();
-        let title = render(&app, MIN_WIDTH, MIN_HEIGHT);
-        assert!(title.contains("rs-tic-tac-toe"), "{title}");
-        assert!(title.contains("ゲーム開始"), "{title}");
+        for (lang, start, turn, score, title_label, quit, evaluation_label, draw_label) in [
+            (Lang::En, "Start game", "Your turn", "Session score", "Title", "Quit", "Position", "Draw"),
+            (
+                Lang::Ja,
+                "ゲーム開始",
+                "あなたの番",
+                "セッション戦績",
+                "タイトル",
+                "終了",
+                "局面評価",
+                "引分",
+            ),
+        ] {
+            let mut app = App::with_lang(lang);
+            let screen = render(&app, MIN_WIDTH, MIN_HEIGHT);
+            assert!(screen.contains("rs-tic-tac-toe"), "{screen}");
+            assert!(screen.contains(start), "{screen}");
+            assert!(screen.contains(Msg::Language.text(lang)), "{screen}");
+            if lang == Lang::En {
+                assert!(screen.contains("First player  You"), "{screen}");
+            }
+            assert_within_width(&screen, MIN_WIDTH);
 
-        app.start();
-        let playing = render(&app, MIN_WIDTH, MIN_HEIGHT);
-        assert!(playing.contains("あなたの番"), "{playing}");
-        assert!(playing.contains("戦績"), "{playing}");
-        assert!(playing.contains("タイトル"), "{playing}");
-        assert!(playing.contains("終了"), "{playing}");
+            app.start();
+            let screen = render(&app, MIN_WIDTH, MIN_HEIGHT);
+            for expected in [turn, score, title_label, quit] {
+                assert!(screen.contains(expected), "missing {expected:?}: {screen}");
+            }
+            if lang == Lang::En {
+                assert!(!screen.contains("Turn Your turn"), "{screen}");
+            }
+            assert_within_width(&screen, MIN_WIDTH);
 
-        app.show_evaluation = true;
-        let evaluation = render(&app, MIN_WIDTH, MIN_HEIGHT);
-        assert!(evaluation.contains("局面評価"), "{evaluation}");
-        assert!(evaluation.contains("引分"), "{evaluation}");
+            app.show_evaluation = true;
+            let screen = render(&app, MIN_WIDTH, MIN_HEIGHT);
+            assert!(screen.contains(evaluation_label), "{screen}");
+            assert!(screen.contains(draw_label), "{screen}");
+            assert_within_width(&screen, MIN_WIDTH);
+        }
     }
 
     #[test]
     fn hint_explains_draw_only_and_forced_loss_positions() {
-        let mut draw = App::new();
-        draw.start();
-        draw.on_key(KeyEvent::from(KeyCode::Char('h')));
-        let screen = render(&draw, MIN_WIDTH, MIN_HEIGHT);
-        assert!(screen.contains("引き分けしかありません"), "{screen}");
-
         let record = Record {
             first: Side::Cpu,
-            names: ["あなた".into(), "CPU".into()],
+            names: [None, None],
             moves: vec![0, 4, 8, 2, 6],
         };
-        let mut loss = App::new();
-        loss.first = Side::Cpu;
-        loss.start();
-        loss.game = record.game_at(record.moves.len()).unwrap();
-        loss.on_key(KeyEvent::from(KeyCode::Char('h')));
-        let screen = render(&loss, MIN_WIDTH, MIN_HEIGHT);
-        assert!(screen.contains("負けを避けられません"), "{screen}");
+        for (lang, draw_text, loss_text) in [
+            (Lang::En, "Only a draw is possible", "A loss cannot be avoided"),
+            (Lang::Ja, "引き分けしかありません", "負けを避けられません"),
+        ] {
+            let mut draw = App::with_lang(lang);
+            draw.start();
+            draw.on_key(KeyEvent::from(KeyCode::Char('h')));
+            let screen = render(&draw, MIN_WIDTH, MIN_HEIGHT);
+            assert!(screen.contains(draw_text), "{screen}");
+
+            let mut loss = App::with_lang(lang);
+            loss.first = Side::Cpu;
+            loss.start();
+            loss.game = record.game_at(record.moves.len()).unwrap();
+            loss.on_key(KeyEvent::from(KeyCode::Char('h')));
+            let screen = render(&loss, MIN_WIDTH, MIN_HEIGHT);
+            assert!(screen.contains(loss_text), "{screen}");
+        }
     }
 
     #[test]
     fn undersized_terminal_shows_resize_message() {
-        let screen = render(&App::new(), MIN_WIDTH - 1, MIN_HEIGHT - 1);
-        assert!(screen.contains("以上に広げてください"), "{screen}");
+        for (lang, expected) in [(Lang::En, "Resize the terminal"), (Lang::Ja, "以上に広げてください")] {
+            let screen = render(&App::with_lang(lang), MIN_WIDTH - 1, MIN_HEIGHT - 1);
+            assert!(screen.contains(expected), "{screen}");
+            assert_within_width(&screen, MIN_WIDTH - 1);
+        }
     }
 
     #[test]
     fn minimum_size_renders_win_loss_and_draw_results() {
-        let win = completed_app(Side::Human, &[0, 3, 1, 4, 2], "あなたの勝ち！");
-        assert!(render(&win, MIN_WIDTH, MIN_HEIGHT).contains("あなたの勝ち"));
+        for lang in [Lang::En, Lang::Ja] {
+            let win = completed_app(Side::Human, &[0, 3, 1, 4, 2], Msg::HumanWins.text(lang), lang);
+            let screen = render(&win, MIN_WIDTH, MIN_HEIGHT);
+            assert!(screen.contains(Msg::HumanWins.text(lang)), "{screen}");
+            assert_within_width(&screen, MIN_WIDTH);
 
-        let loss = completed_app(Side::Cpu, &[0, 3, 1, 4, 2], "CPU の勝ち");
-        assert!(render(&loss, MIN_WIDTH, MIN_HEIGHT).contains("CPU の勝ち"));
+            let loss = completed_app(Side::Cpu, &[0, 3, 1, 4, 2], Msg::CpuWins.text(lang), lang);
+            let screen = render(&loss, MIN_WIDTH, MIN_HEIGHT);
+            assert!(screen.contains(Msg::CpuWins.text(lang)), "{screen}");
+            assert_within_width(&screen, MIN_WIDTH);
 
-        let draw = completed_app(Side::Human, &[0, 1, 2, 4, 3, 5, 7, 6, 8], "引き分け");
-        assert!(render(&draw, MIN_WIDTH, MIN_HEIGHT).contains("引き分け"));
+            let draw = completed_app(Side::Human, &[0, 1, 2, 4, 3, 5, 7, 6, 8], Msg::Draw.text(lang), lang);
+            let screen = render(&draw, MIN_WIDTH, MIN_HEIGHT);
+            assert!(screen.contains(Msg::Draw.text(lang)), "{screen}");
+            assert_within_width(&screen, MIN_WIDTH);
+        }
     }
 
     fn replay_record(complete: bool) -> Record {
         Record {
             first: Side::Human,
-            names: ["Alice".into(), "Bob".into()],
+            names: [Some("Alice".into()), Some("Bob".into())],
             moves: if complete { vec![0, 3, 1, 4, 2] } else { vec![0, 4, 8] },
         }
     }
 
     #[test]
     fn minimum_size_renders_replay_midway_complete_and_unfinished() {
-        let mut midway = App::new_replay(replay_record(true), Duration::from_millis(1_500), true, false);
-        midway.on_key(KeyEvent::from(KeyCode::Right));
-        let screen = render(&midway, MIN_WIDTH, MIN_HEIGHT);
-        assert!(screen.contains("Alice"), "{screen}");
-        assert!(screen.contains("一時停止"), "{screen}");
-        assert!(screen.contains("1/5"), "{screen}");
+        for (lang, paused, winner, end) in [
+            (Lang::En, "Paused", "Alice wins", "End of record"),
+            (Lang::Ja, "一時停止", "Alice の勝ち", "棋譜の終わり"),
+        ] {
+            let mut midway = App::new_replay(replay_record(true), Duration::from_millis(1_500), true, false, lang);
+            midway.on_key(KeyEvent::from(KeyCode::Right));
+            let screen = render(&midway, MIN_WIDTH, MIN_HEIGHT);
+            assert!(screen.contains("Alice"), "{screen}");
+            assert!(screen.contains(paused), "{screen}");
+            assert!(screen.contains(if lang == Lang::En { "Move 1/5" } else { "手数 1/5" }), "{screen}");
+            assert_within_width(&screen, MIN_WIDTH);
 
-        let mut complete = App::new_replay(replay_record(true), Duration::from_millis(1_500), true, false);
-        complete.on_key(KeyEvent::from(KeyCode::End));
-        assert!(render(&complete, MIN_WIDTH, MIN_HEIGHT).contains("Alice の勝ち"));
+            let mut complete = App::new_replay(replay_record(true), Duration::from_millis(1_500), true, false, lang);
+            complete.on_key(KeyEvent::from(KeyCode::End));
+            assert!(render(&complete, MIN_WIDTH, MIN_HEIGHT).contains(winner));
 
-        let mut unfinished = App::new_replay(replay_record(false), Duration::from_millis(1_500), true, false);
-        unfinished.on_key(KeyEvent::from(KeyCode::End));
-        assert!(render(&unfinished, MIN_WIDTH, MIN_HEIGHT).contains("棋譜の終わり"));
+            let mut unfinished = App::new_replay(replay_record(false), Duration::from_millis(1_500), true, false, lang);
+            unfinished.on_key(KeyEvent::from(KeyCode::End));
+            assert!(render(&unfinished, MIN_WIDTH, MIN_HEIGHT).contains(end));
+        }
     }
 
     #[test]
     #[ignore]
     fn dump_screens() {
-        let mut app = App::new();
-        println!("{}", render(&app, MIN_WIDTH, MIN_HEIGHT));
-        app.start();
-        app.show_evaluation = true;
-        println!("{}", render(&app, MIN_WIDTH, MIN_HEIGHT));
+        for lang in [Lang::En, Lang::Ja] {
+            let mut app = App::with_lang(lang);
+            println!("{}", render(&app, MIN_WIDTH, MIN_HEIGHT));
+            app.start();
+            app.show_evaluation = true;
+            println!("{}", render(&app, MIN_WIDTH, MIN_HEIGHT));
+        }
     }
 
     #[test]
     #[ignore]
     fn plays_one_game_against_cpu() {
-        let mut app = App::new();
-        app.first = Side::Cpu;
-        app.start();
-        let started = std::time::Instant::now();
-        while app.screen == Screen::Playing && started.elapsed() < Duration::from_secs(30) {
-            if app.human_can_act()
-                && let Some(cell) = app.game.legal_moves().first().copied()
-            {
-                app.cursor = cell;
-                app.on_key(KeyEvent::from(KeyCode::Enter));
+        for lang in [Lang::En, Lang::Ja] {
+            let mut app = App::with_lang(lang);
+            app.first = Side::Cpu;
+            app.start();
+            let started = std::time::Instant::now();
+            while app.screen == Screen::Playing && started.elapsed() < Duration::from_secs(30) {
+                if app.human_can_act()
+                    && let Some(cell) = app.game.legal_moves().first().copied()
+                {
+                    app.cursor = cell;
+                    app.on_key(KeyEvent::from(KeyCode::Enter));
+                }
+                app.on_tick();
+                let screen = render(&app, MIN_WIDTH, MIN_HEIGHT);
+                assert_within_width(&screen, MIN_WIDTH);
+                std::thread::sleep(Duration::from_millis(33));
             }
-            app.on_tick();
-            let _ = render(&app, MIN_WIDTH, MIN_HEIGHT);
-            std::thread::sleep(Duration::from_millis(33));
+            assert_eq!(app.screen, Screen::GameOver);
+            println!("result = {}, moves = {:?}", app.message, app.log);
         }
-        assert_eq!(app.screen, Screen::GameOver);
-        println!("result = {}, moves = {:?}", app.message, app.log);
     }
 }

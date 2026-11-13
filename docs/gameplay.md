@@ -28,6 +28,7 @@ Run `rs-tic-tac-toe` (or `cargo run --release`) to open the title screen.
 |---|---|---|
 | `d` | Difficulty | Easy / Normal / Perfect |
 | `f` | First player (plays X) | You / CPU |
+| `l` | Language | English / 日本語 |
 | `Enter` / `Space` | Start | |
 | `q` | Quit | |
 
@@ -56,6 +57,10 @@ Press `e` to label every empty cell with the result of playing there, assuming p
 - **Win n** — you win, and the game ends after `n` moves counting this one (`Win 1` is an immediate win).
 - **Draw** — best play from both sides leads to a draw.
 - **Loss n** — the opponent can force a win, ending the game after `n` moves.
+
+## Language
+
+The interface is in English by default. Switch to Japanese with `l` on the title screen, or start the game with `--lang ja` (this also works for `replay`).
 
 ## Terminal requirements
 

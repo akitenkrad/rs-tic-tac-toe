@@ -1,6 +1,7 @@
 //! CPU の思考と乱数．
 
 use crate::game::{Game, best_moves};
+use crate::i18n::{Lang, Msg};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -19,11 +20,11 @@ impl Difficulty {
         }
     }
 
-    pub fn label(self) -> &'static str {
+    pub fn label(self, lang: Lang) -> &'static str {
         match self {
-            Self::Easy => "やさしい",
-            Self::Normal => "ふつう",
-            Self::Perfect => "最強 (完全読み)",
+            Self::Easy => Msg::Easy.text(lang),
+            Self::Normal => Msg::Normal.text(lang),
+            Self::Perfect => Msg::Perfect.text(lang),
         }
     }
 
@@ -101,9 +102,9 @@ mod tests {
 
     #[test]
     fn difficulty_metadata_matches_specification() {
-        assert_eq!(Difficulty::Easy.label(), "やさしい");
-        assert_eq!(Difficulty::Normal.label(), "ふつう");
-        assert_eq!(Difficulty::Perfect.label(), "最強 (完全読み)");
+        assert_eq!(Difficulty::Easy.label(Lang::En), "Easy");
+        assert_eq!(Difficulty::Normal.label(Lang::Ja), "ふつう");
+        assert_eq!(Difficulty::Perfect.label(Lang::En), "Perfect (full search)");
         assert_eq!(Difficulty::Easy.accuracy(), 20);
         assert_eq!(Difficulty::Normal.accuracy(), 65);
         assert_eq!(Difficulty::Perfect.accuracy(), 100);

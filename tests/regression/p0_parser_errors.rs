@@ -5,14 +5,14 @@ use rs_tic_tac_toe::record::{RecordError, parse, to_text};
 fn empty_record_uses_all_defaults() {
     let record = parse("").unwrap();
     assert_eq!(record.first, Side::Human);
-    assert_eq!(record.names, ["あなた", "CPU"]);
+    assert_eq!(record.names, [None, None]);
     assert!(record.moves.is_empty());
 }
 
 #[test]
 fn crlf_comments_and_unicode_names_round_trip() {
     let record = parse("first = cpu\r\nhuman = 山田 Alice\r\ncpu = ボブ\r\n\r\nA1 # opening\r\n5\r\n").unwrap();
-    assert_eq!(record.names, ["山田 Alice", "ボブ"]);
+    assert_eq!(record.names, [Some("山田 Alice".into()), Some("ボブ".into())]);
     assert_eq!(parse(&to_text(&record)).unwrap(), record);
 }
 
